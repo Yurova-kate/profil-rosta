@@ -25,5 +25,9 @@ def test_development_goals_do_not_change_skills():
             assert goals[0]["certification_name"]=="Учебный экзамен"
             assert call("GET",f"/api/users/{employee_id}/competencies",token).json()==[]
             assert call("PUT",f"/api/users/{employee_id}/development/{goal}",token,{"title":"Освоить компетенцию","competency_id":competency_id,"target_level":"advanced","status":"completed"}).status_code==200
+            updated=call("GET",f"/api/users/{employee_id}/development",token).json()[0]
+            assert updated["status"]=="completed"
+            assert updated["certification_id"] is None
+            assert call("POST",f"/api/users/{employee_id}/development",token,{"title":"Некорректная цель","certification_id":999999}).status_code==404
             assert call("GET",f"/api/users/{employee_id}/competencies",token).json()==[]
             assert call("DELETE",f"/api/users/{employee_id}/development/{goal}",token).status_code==200
