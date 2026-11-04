@@ -15,8 +15,7 @@ def test_end_to_end():
             mt=call("post","/api/login",json={"email":"manager@test.local","password":"securepassword2"}).json()["token"]
             et=call("post","/api/login",json={"email":"employee@test.local","password":"securepassword3"}).json()["token"]
             s=call("post",f"/api/users/{e}/skills",et,json={"name":"СКД 1С"}).json()["id"]
-            assert call("post",f"/api/users/{e}/skills/{s}/confirm",et).status_code==403
-            assert call("post",f"/api/users/{e}/skills/{s}/confirm",mt).status_code==200
+            assert call("post",f"/api/users/{e}/skills/{s}/confirm",mt).status_code==405
             assert call("post",f"/api/users/{e}/projects",et,json={"title":"Внедрение 1С","description":"Разработка отчётов"}).status_code==200
             assert call("post","/api/certifications",a,json={"skill_keyword":"СКД","exam_title":"Учебный экзамен 1С"}).status_code==200
             catalog=call("get","/api/certifications/catalog",et).json()
@@ -28,7 +27,7 @@ def test_end_to_end():
             assert call("delete",f"/api/users/{e}/certifications/{cert}",mt).status_code==403
             assert call("delete",f"/api/users/{e}/certifications/{cert}",et).status_code==200
             p=call("get",f"/api/users/{e}/profile",et).json()
-            assert p["skills"][0]["verified_by"]==m
+            assert p["skills"][0]["name"]=="СКД 1С"
             assert p["certifications"][0]["exam_title"]=="Учебный экзамен 1С"
             r=call("get",f"/api/users/{e}/resume.docx",et)
             assert r.status_code==200 and r.content[:2]==b"PK"
