@@ -41,6 +41,11 @@ def initialize():
           verified_by INTEGER REFERENCES users(id),
           UNIQUE(employee_id,competency_id));
         """)
+        db.execute("""CREATE TABLE IF NOT EXISTS legacy_skill_mappings(
+            employee_id INTEGER NOT NULL,
+            skill_id INTEGER NOT NULL UNIQUE REFERENCES skills(id),
+            competency_id INTEGER NOT NULL REFERENCES competency_catalog(id),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
         defaults=[
           ("Платформа 1С","Язык запросов 1С"),
           ("Платформа 1С","Система компоновки данных (СКД)"),
