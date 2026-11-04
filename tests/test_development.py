@@ -30,4 +30,10 @@ def test_development_goals_do_not_change_skills():
             assert updated["certification_id"] is None
             assert call("POST",f"/api/users/{employee_id}/development",token,{"title":"Некорректная цель","certification_id":999999}).status_code==404
             assert call("GET",f"/api/users/{employee_id}/competencies",token).json()==[]
+            manager_id=call("POST","/api/users",token,{"name":"Manager","email":"manager@demo.local","password":"password0002","role":"manager"}).json()["id"]
+            employee=call("POST","/api/users",token,{"name":"Employee","email":"employee@demo.local","password":"password0003","role":"employee","manager_id":manager_id}).json()["id"]
+            manager_token=call("POST","/api/login",data={"email":"manager@demo.local","password":"password0002"}).json()["token"]
+            assert call("GET",f"/api/users/{employee}/development",manager_token).status_code==200
+            assert call("POST",f"/api/users/{employee}/development",manager_token,{"title":"Цель сотрудника"}).status_code==403
+            assert call("GET",f"/api/users/{employee_id}/development",manager_token).status_code==403
             assert call("DELETE",f"/api/users/{employee_id}/development/{goal}",token).status_code==200
