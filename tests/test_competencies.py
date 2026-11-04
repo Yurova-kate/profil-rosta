@@ -30,4 +30,12 @@ def test_catalog_permissions_and_self_assessment():
             records=req("GET",f"/api/users/{employee_id}/competencies",employee).json()
             assert records[0]["level"]=="advanced"
             assert "verified_by" not in records[0]
+            old_skill=req("POST",f"/api/users/{employee_id}/skills",employee,{"name":"СКД"}).json()["id"]
+            assert req("POST",f"/api/users/{employee_id}/competencies/map-legacy",manager,{"skill_id":old_skill,"competency_id":competency_id,"level":"intermediate"}).status_code==403
+            assert req("POST",f"/api/users/{employee_id}/competencies/map-legacy",employee,{"skill_id":old_skill,"competency_id":competency_id,"level":"intermediate"}).status_code==409
             assert req("DELETE",f"/api/users/{employee_id}/competencies/{assignment_id}",employee).status_code==200
+            mapped=req("POST",f"/api/users/{employee_id}/competencies/map-legacy",employee,{"skill_id":old_skill,"competency_id":competency_id,"level":"advanced"})
+            assert mapped.status_code==200 and mapped.json()["source_preserved"] is True
+            assert req("POST",f"/api/users/{employee_id}/competencies/map-legacy",employee,{"skill_id":old_skill,"competency_id":competency_id,"level":"advanced"}).status_code==409
+            assert req("GET",f"/api/users/{employee_id}/profile",employee).json()["skills"][0]["name"]=="СКД"
+
