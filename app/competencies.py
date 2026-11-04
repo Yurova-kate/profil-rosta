@@ -133,3 +133,36 @@ def remove(employee_id:int,assignment_id:int,authorization:str|None=Header(defau
                        (assignment_id,employee_id))
         if not cur.rowcount: raise HTTPException(404,"Компетенция не найдена")
     return {"ok":True}
+
+class LegacyMapping(BaseModel):
+    skill_id:int
+    competency_id:int
+    level:str
+
+@router.post("/users/{employee_id}/competencies/map-legacy")
+def map_legacy(employee_id:int,data:LegacyMapping,authorization:str|None=Header(default=None)):
+    """Explicit, non-destructive mapping; original skill remains intact."""
+    main.access(actor(authorization),employee_id,write=True)
+    if data.level not in LEVELS:
+        raise HTTPException(422,"Некорректный уровень")
+    with main.database() as db:
+        skill=db.execute("SELECT id,name FROM skills WHERE id=? AND employee_id=?",(data.skill_id,employee_id)).fetchone()
+        if not skill: raise HTTPException(404,"Исходный навык не найден")
+        competency=db.execute("SELECT id FROM competency_catalog WHERE id=? AND active=1",(data.competency_id,)).fetchone()
+        if not competency: raise HTTPException(404,"Компетенция не найдена")
+        if db.execute("SELECT 1 FROM employee_competencies WHERE employee_id=? AND competency_id=?",(employee_id,data.competency_id)).fetchone():
+            raise HTTPException(409,"Компетенция уже добавлена")
+        db.execute("""CREATE TABLE IF NOT EXISTS legacy_skill_mappings(
+            employee_id INTEGER NOT NULL,skill_id INTEGER NOT NULL UNIQUE REFERENCES skills(id),
+            competency_id INTEGER NOT NULL REFERENCES competency_catalog(id),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+        if db.execute("SELECT 1 FROM legacy_skill_mappings WHERE skill_id=?",(data.skill_id,)).fetchone():
+            raise HTTPException(409,"Этот навык уже сопоставлен")
+        try:
+            cur=db.execute("INSERT INTO employee_competencies(employee_id,competency_id,level) VALUES(?,?,?)",
+              (employee_id,data.competency_id,data.level))
+            db.execute("INSERT INTO legacy_skill_mappings(employee_id,skill_id,competency_id) VALUES(?,?,?)",
+              (employee_id,data.skill_id,data.competency_id))
+        except sqlite3.IntegrityError:
+            raise HTTPException(409,"Навык уже сопоставлен")
+    return {"id":cur.lastrowid,"source_skill":skill["name"],"source_preserved":True}
