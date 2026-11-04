@@ -129,6 +129,10 @@ def change_level(employee_id:int,assignment_id:int,data:LevelChange,authorizatio
 def remove(employee_id:int,assignment_id:int,authorization:str|None=Header(default=None)):
     main.access(actor(authorization),employee_id,write=True)
     with main.database() as db:
+        row=db.execute("SELECT competency_id FROM employee_competencies WHERE id=? AND employee_id=?",(assignment_id,employee_id)).fetchone()
+        if not row: raise HTTPException(404,"Компетенция не найдена")
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='legacy_skill_mappings'").fetchone():
+            db.execute("DELETE FROM legacy_skill_mappings WHERE employee_id=? AND competency_id=?",(employee_id,row["competency_id"]))
         cur=db.execute("DELETE FROM employee_competencies WHERE id=? AND employee_id=?",
                        (assignment_id,employee_id))
         if not cur.rowcount: raise HTTPException(404,"Компетенция не найдена")
