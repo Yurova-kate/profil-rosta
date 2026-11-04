@@ -17,9 +17,12 @@ def test_development_goals_do_not_change_skills():
             catalog=call("GET","/api/competencies/catalog",token).json()
             assert catalog
             competency_id=catalog[0]["id"]
-            goal=call("POST",f"/api/users/{employee_id}/development",token,{"title":"Освоить компетенцию","competency_id":competency_id,"target_level":"expert","actions":"Практика и обучение"}).json()["id"]
+            certification=call("POST","/api/certifications",token,{"skill_keyword":"СКД","exam_title":"Учебный экзамен"}).json()["id"]
+            goal=call("POST",f"/api/users/{employee_id}/development",token,{"title":"Освоить компетенцию","competency_id":competency_id,"target_level":"expert","certification_id":certification,"actions":"Практика и обучение"}).json()["id"]
             goals=call("GET",f"/api/users/{employee_id}/development",token).json()
             assert goals[0]["id"]==goal
+            assert goals[0]["certification_id"]==certification
+            assert goals[0]["certification_name"]=="Учебный экзамен"
             assert call("GET",f"/api/users/{employee_id}/competencies",token).json()==[]
             assert call("PUT",f"/api/users/{employee_id}/development/{goal}",token,{"title":"Освоить компетенцию","competency_id":competency_id,"target_level":"advanced","status":"completed"}).status_code==200
             assert call("GET",f"/api/users/{employee_id}/competencies",token).json()==[]
