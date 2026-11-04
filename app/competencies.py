@@ -92,7 +92,7 @@ def employee_competencies(employee_id:int,authorization:str|None=Header(default=
     main.access(actor(authorization),employee_id)
     with main.database() as db:
         return [dict(row) for row in db.execute("""
-          SELECT ec.id,ec.competency_id,c.name,c.category,ec.level,ec.verified_by
+          SELECT ec.id,ec.competency_id,c.name,c.category,ec.level
           FROM employee_competencies ec JOIN competency_catalog c ON c.id=ec.competency_id
           WHERE ec.employee_id=? ORDER BY c.category,c.name""",(employee_id,))]
 
@@ -102,24 +102,8 @@ def change_level(employee_id:int,assignment_id:int,data:LevelChange,authorizatio
     if data.level not in LEVELS:
         raise HTTPException(422,"Некорректный уровень")
     with main.database() as db:
-        cur=db.execute("UPDATE employee_competencies SET level=?,verified_by=NULL WHERE id=? AND employee_id=?",
+        cur=db.execute("UPDATE employee_competencies SET level=? WHERE id=? AND employee_id=?",
                        (data.level,assignment_id,employee_id))
-        if not cur.rowcount: raise HTTPException(404,"Компетенция не найдена")
-    return {"ok":True}
-
-@router.post("/users/{employee_id}/competencies/{assignment_id}/confirm")
-def confirm(employee_id:int,assignment_id:int,authorization:str|None=Header(default=None)):
-    user=actor(authorization)
-    if user["role"]=="employee":
-        raise HTTPException(403,"Подтверждает руководитель")
-    if user["role"]=="manager":
-        with main.database() as db:
-            person=db.execute("SELECT manager_id FROM users WHERE id=?",(employee_id,)).fetchone()
-        if not person or person["manager_id"]!=user["id"]:
-            raise HTTPException(403,"Не ваш сотрудник")
-    with main.database() as db:
-        cur=db.execute("UPDATE employee_competencies SET verified_by=? WHERE id=? AND employee_id=?",
-                       (user["id"],assignment_id,employee_id))
         if not cur.rowcount: raise HTTPException(404,"Компетенция не найдена")
     return {"ok":True}
 
