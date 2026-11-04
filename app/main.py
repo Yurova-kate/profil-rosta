@@ -144,7 +144,7 @@ def profile(employee_id:int,authorization:str|None=Header(default=None)):
         skills=[dict(r) for r in db.execute("SELECT id,name,verified_by FROM skills WHERE employee_id=?",(employee_id,))]
         projects=[dict(r) for r in db.execute("SELECT id,title,description FROM projects WHERE employee_id=?",(employee_id,))]
         recommendations=[dict(r) for r in db.execute("SELECT DISTINCT c.id,c.exam_title FROM certifications c JOIN skills s ON lower(s.name) LIKE '%'||lower(c.skill_keyword)||'%' WHERE s.employee_id=?",(employee_id,))]
-    certificates=[dict(r) for r in db.execute("SELECT ec.id,ec.certification_id,c.exam_title,ec.certificate_number,ec.passport_url FROM employee_certifications ec JOIN certifications c ON c.id=ec.certification_id WHERE ec.employee_id=? ORDER BY ec.id DESC",(employee_id,))]
+        certificates=[dict(r) for r in db.execute("SELECT ec.id,ec.certification_id,c.exam_title,ec.certificate_number,ec.passport_url FROM employee_certifications ec JOIN certifications c ON c.id=ec.certification_id WHERE ec.employee_id=? ORDER BY ec.id DESC",(employee_id,))]
     return {"employee":dict(person),"details":dict(details) if details else {"job_title":"","specialization":"","grade":"","years_experience":None,"about":""},"skills":skills,"projects":projects,"certifications":recommendations,"earned_certifications":certificates}
 
 @app.post("/api/users/{employee_id}/skills")
