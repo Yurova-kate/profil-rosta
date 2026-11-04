@@ -143,9 +143,12 @@ def profile(employee_id:int,authorization:str|None=Header(default=None)):
         details=db.execute("SELECT job_title,specialization,grade,years_experience,about,updated_at FROM employee_profiles WHERE employee_id=?",(employee_id,)).fetchone()
         skills=[dict(r) for r in db.execute("SELECT id,name,verified_by FROM skills WHERE employee_id=?",(employee_id,))]
         projects=[dict(r) for r in db.execute("SELECT id,title,description FROM projects WHERE employee_id=?",(employee_id,))]
+        competency_rows=[dict(r) for r in db.execute("""SELECT c.name,ec.level,ec.verified_by
+          FROM employee_competencies ec JOIN competency_catalog c ON c.id=ec.competency_id
+          WHERE ec.employee_id=? ORDER BY c.category,c.name""",(employee_id,))] if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='employee_competencies'").fetchone() else []
         recommendations=[dict(r) for r in db.execute("SELECT DISTINCT c.id,c.exam_title FROM certifications c JOIN skills s ON lower(s.name) LIKE '%'||lower(c.skill_keyword)||'%' WHERE s.employee_id=?",(employee_id,))]
         certificates=[dict(r) for r in db.execute("SELECT ec.id,ec.certification_id,c.exam_title,ec.certificate_number,ec.passport_url FROM employee_certifications ec JOIN certifications c ON c.id=ec.certification_id WHERE ec.employee_id=? ORDER BY ec.id DESC",(employee_id,))]
-    return {"employee":dict(person),"details":dict(details) if details else {"job_title":"","specialization":"","grade":"","years_experience":None,"about":""},"skills":skills,"projects":projects,"certifications":recommendations,"earned_certifications":certificates}
+    return {"employee":dict(person),"details":dict(details) if details else {"job_title":"","specialization":"","grade":"","years_experience":None,"about":""},"skills":skills,"competency_rows":competency_rows,"projects":projects,"certifications":recommendations,"earned_certifications":certificates}
 
 @app.post("/api/users/{employee_id}/skills")
 def add_skill(employee_id:int,data:Skill,authorization:str|None=Header(default=None)):
@@ -200,6 +203,10 @@ def resume(employee_id:int,authorization:str|None=Header(default=None)):
     doc.add_heading("Сертификации",level=2)
     for cert in data["earned_certifications"]:
         doc.add_paragraph(cert["exam_title"]+" — № "+cert["certificate_number"]+((" — "+cert["passport_url"]) if cert["passport_url"] else ""),style="List Bullet")
+    doc.add_heading("Компетенции из справочника",level=2)
+    levels={"beginner":"Начальный","intermediate":"Рабочий","advanced":"Продвинутый","expert":"Экспертный"}
+    for competency in data["competency_rows"]:
+        doc.add_paragraph(competency["name"]+" — "+levels.get(competency["level"],competency["level"])+(" (подтверждено)" if competency["verified_by"] else " (заявлено)"),style="List Bullet")
     doc.add_heading("Проектный опыт",level=2)
     for p in data["projects"]:
         doc.add_heading(p["title"],level=3)
