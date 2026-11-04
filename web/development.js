@@ -16,7 +16,7 @@ function developmentView(){
 }
 function bindDevelopment(){
   const payload=form=>{const d=Object.fromEntries(new FormData(form));return {...d,competency_id:d.competency_id?Number(d.competency_id):null,target_level:d.target_level||null,certification_id:d.certification_id?Number(d.certification_id):null,due_date:d.due_date||null}};
-  const submit=async(form,path,method)=>{try{await json(path,{method,body:payload(form)});await loadDevelopment();alertMessage('План развития сохранён')}catch(e){alertMessage(e.message,true)}};
+  const submit=async(form,path,method)=>{const button=form.querySelector('button[type="submit"],button:not([type])');if(button)button.disabled=true;try{await json(path,{method,body:payload(form)});await loadDevelopment();alertMessage('План развития сохранён')}catch(e){if(button)button.disabled=false;alertMessage(e.message,true)}};
   const form=document.getElementById('newGoal');
   if(form)form.onsubmit=e=>{e.preventDefault();submit(form,'/users/'+selected+'/development','POST')};
   document.querySelectorAll('[data-goal-edit]').forEach(f=>f.onsubmit=e=>{e.preventDefault();submit(f,'/users/'+selected+'/development/'+f.dataset.goalEdit,'PUT')});
