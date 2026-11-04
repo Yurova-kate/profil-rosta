@@ -185,8 +185,14 @@ def resume(employee_id:int,authorization:str|None=Header(default=None)):
         if details.get(key) is not None and details.get(key)!="":
             doc.add_paragraph(label+": "+str(details[key]))
     if details.get("about"): doc.add_paragraph(details["about"])
-    doc.add_heading("Компетенции",level=2)
-    for s in data["skills"]: doc.add_paragraph(s["name"],style="List Bullet")
+    doc.add_heading("Дополнительные навыки",level=2)
+    with database() as db:
+        mapped={r["skill_id"] for r in db.execute(
+            "SELECT skill_id FROM legacy_skill_mappings WHERE employee_id=?",(employee_id,)
+        )} if db.execute("SELECT 1 FROM sqlite_master WHERE name='legacy_skill_mappings'").fetchone() else set()
+    for s in data["skills"]:
+        if s["id"] not in mapped:
+            doc.add_paragraph(s["name"],style="List Bullet")
     doc.add_heading("Сертификации",level=2)
     for cert in data["earned_certifications"]:
         doc.add_paragraph(cert["exam_title"]+" — № "+cert["certificate_number"]+((" — "+cert["passport_url"]) if cert["passport_url"] else ""),style="List Bullet")
