@@ -38,6 +38,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS skills(id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL REFERENCES users(id),name TEXT NOT NULL,verified_by INTEGER REFERENCES users(id),UNIQUE(employee_id,name));
         CREATE TABLE IF NOT EXISTS projects(id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL REFERENCES users(id),title TEXT NOT NULL,description TEXT NOT NULL DEFAULT '');
         CREATE TABLE IF NOT EXISTS certifications(id INTEGER PRIMARY KEY,skill_keyword TEXT NOT NULL,exam_title TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS employee_certifications(id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL REFERENCES users(id),certification_id INTEGER NOT NULL REFERENCES certifications(id),certificate_number TEXT NOT NULL,passport_url TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(employee_id,certification_id,certificate_number));
         """)
 
 @app.on_event("startup")
@@ -59,6 +60,11 @@ class Skill(BaseModel):
 class Project(BaseModel):
     title:str=Field(min_length=2,max_length=200)
     description:str=""
+class EmployeeCertificate(BaseModel):
+    certification_id:int
+    certificate_number:str=Field(min_length=1,max_length=120)
+    passport_url:str|None=None
+
 class Exam(BaseModel):
     skill_keyword:str
     exam_title:str
@@ -129,7 +135,8 @@ def profile(employee_id:int,authorization:str|None=Header(default=None)):
         skills=[dict(r) for r in db.execute("SELECT id,name,verified_by FROM skills WHERE employee_id=?",(employee_id,))]
         projects=[dict(r) for r in db.execute("SELECT id,title,description FROM projects WHERE employee_id=?",(employee_id,))]
         recommendations=[dict(r) for r in db.execute("SELECT DISTINCT c.id,c.exam_title FROM certifications c JOIN skills s ON lower(s.name) LIKE '%'||lower(c.skill_keyword)||'%' WHERE s.employee_id=?",(employee_id,))]
-    return {"employee":dict(person),"skills":skills,"projects":projects,"certifications":recommendations}
+    certificates=[dict(r) for r in db.execute("SELECT ec.id,ec.certification_id,c.exam_title,ec.certificate_number,ec.passport_url FROM employee_certifications ec JOIN certifications c ON c.id=ec.certification_id WHERE ec.employee_id=? ORDER BY ec.id DESC",(employee_id,))]
+    return {"employee":dict(person),"skills":skills,"projects":projects,"certifications":recommendations,"earned_certifications":certificates}
 
 @app.post("/api/users/{employee_id}/skills")
 def add_skill(employee_id:int,data:Skill,authorization:str|None=Header(default=None)):
@@ -176,6 +183,9 @@ def resume(employee_id:int,authorization:str|None=Header(default=None)):
     doc.add_heading(data["employee"]["name"],level=1)
     doc.add_heading("Компетенции",level=2)
     for s in data["skills"]: doc.add_paragraph(s["name"]+(" — подтверждено" if s["verified_by"] else " — заявлено"),style="List Bullet")
+    doc.add_heading("Сертификации",level=2)
+    for cert in data["earned_certifications"]:
+        doc.add_paragraph(cert["exam_title"]+" — № "+cert["certificate_number"]+((" — "+cert["passport_url"]) if cert["passport_url"] else ""),style="List Bullet")
     doc.add_heading("Проектный опыт",level=2)
     for p in data["projects"]:
         doc.add_heading(p["title"],level=3)
@@ -189,3 +199,37 @@ from fastapi.responses import FileResponse
 @app.get("/", include_in_schema=False)
 def index():
     return FileResponse(ROOT / "web" / "index.html")
+
+@app.get("/api/certifications/catalog")
+def certification_catalog(authorization:str|None=Header(default=None)):
+    current(authorization)
+    with database() as db:
+        return [dict(r) for r in db.execute("SELECT id,exam_title,skill_keyword FROM certifications ORDER BY exam_title,id")]
+
+@app.post("/api/users/{employee_id}/certifications")
+def add_employee_certificate(employee_id:int,data:EmployeeCertificate,authorization:str|None=Header(default=None)):
+    from urllib.parse import urlsplit
+    actor=current(authorization);access(actor,employee_id,write=True)
+    number=data.certificate_number.strip()
+    if not number: raise HTTPException(422,"Укажите номер сертификата")
+    url=(data.passport_url or "").strip() or None
+    if url:
+        parts=urlsplit(url)
+        if parts.scheme!="https" or not parts.hostname or parts.username or parts.password or len(url)>2000:
+            raise HTTPException(422,"Укажите корректную HTTPS-ссылку на паспорт сертификата")
+    with database() as db:
+        if not db.execute("SELECT 1 FROM certifications WHERE id=?",(data.certification_id,)).fetchone():
+            raise HTTPException(404,"Сертификация отсутствует в каталоге")
+        try:
+            cur=db.execute("INSERT INTO employee_certifications(employee_id,certification_id,certificate_number,passport_url) VALUES(?,?,?,?)",(employee_id,data.certification_id,number,url))
+        except sqlite3.IntegrityError:
+            raise HTTPException(409,"Этот сертификат уже добавлен")
+    return {"id":cur.lastrowid}
+
+@app.delete("/api/users/{employee_id}/certifications/{record_id}")
+def delete_employee_certificate(employee_id:int,record_id:int,authorization:str|None=Header(default=None)):
+    actor=current(authorization);access(actor,employee_id,write=True)
+    with database() as db:
+        result=db.execute("DELETE FROM employee_certifications WHERE id=? AND employee_id=?",(record_id,employee_id))
+        if not result.rowcount: raise HTTPException(404,"Запись не найдена")
+    return {"ok":True}
