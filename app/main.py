@@ -182,3 +182,10 @@ def resume(employee_id:int,authorization:str|None=Header(default=None)):
         doc.add_paragraph(p["description"])
     buffer=io.BytesIO();doc.save(buffer);buffer.seek(0)
     return StreamingResponse(buffer,media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",headers={"Content-Disposition":'attachment; filename="resume.docx"'})
+
+# Serve the same-origin UI; the API remains under /api.
+from fastapi.responses import FileResponse
+
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse(ROOT / "web" / "index.html")
