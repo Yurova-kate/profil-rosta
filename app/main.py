@@ -38,6 +38,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS skills(id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL REFERENCES users(id),name TEXT NOT NULL,verified_by INTEGER REFERENCES users(id),UNIQUE(employee_id,name));
         CREATE TABLE IF NOT EXISTS projects(id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL REFERENCES users(id),title TEXT NOT NULL,description TEXT NOT NULL DEFAULT '');
         CREATE TABLE IF NOT EXISTS certifications(id INTEGER PRIMARY KEY,skill_keyword TEXT NOT NULL,exam_title TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS employee_profiles(employee_id INTEGER PRIMARY KEY REFERENCES users(id),job_title TEXT NOT NULL DEFAULT '',specialization TEXT NOT NULL DEFAULT '',grade TEXT NOT NULL DEFAULT '',years_experience INTEGER,about TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE IF NOT EXISTS employee_certifications(id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL REFERENCES users(id),certification_id INTEGER NOT NULL REFERENCES certifications(id),certificate_number TEXT NOT NULL,passport_url TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(employee_id,certification_id,certificate_number));
         """)
 
@@ -60,6 +61,13 @@ class Skill(BaseModel):
 class Project(BaseModel):
     title:str=Field(min_length=2,max_length=200)
     description:str=""
+class ProfileUpdate(BaseModel):
+    job_title:str=Field(default="",max_length=160)
+    specialization:str=Field(default="",max_length=160)
+    grade:str=Field(default="",max_length=80)
+    years_experience:int|None=Field(default=None,ge=0,le=70)
+    about:str=Field(default="",max_length=3000)
+
 class EmployeeCertificate(BaseModel):
     certification_id:int
     certificate_number:str=Field(min_length=1,max_length=120)
@@ -132,11 +140,12 @@ def profile(employee_id:int,authorization:str|None=Header(default=None)):
     with database() as db:
         person=db.execute("SELECT id,email,name,role,manager_id FROM users WHERE id=?",(employee_id,)).fetchone()
         if not person: raise HTTPException(404,"Сотрудник не найден")
+        details=db.execute("SELECT job_title,specialization,grade,years_experience,about,updated_at FROM employee_profiles WHERE employee_id=?",(employee_id,)).fetchone()
         skills=[dict(r) for r in db.execute("SELECT id,name,verified_by FROM skills WHERE employee_id=?",(employee_id,))]
         projects=[dict(r) for r in db.execute("SELECT id,title,description FROM projects WHERE employee_id=?",(employee_id,))]
         recommendations=[dict(r) for r in db.execute("SELECT DISTINCT c.id,c.exam_title FROM certifications c JOIN skills s ON lower(s.name) LIKE '%'||lower(c.skill_keyword)||'%' WHERE s.employee_id=?",(employee_id,))]
     certificates=[dict(r) for r in db.execute("SELECT ec.id,ec.certification_id,c.exam_title,ec.certificate_number,ec.passport_url FROM employee_certifications ec JOIN certifications c ON c.id=ec.certification_id WHERE ec.employee_id=? ORDER BY ec.id DESC",(employee_id,))]
-    return {"employee":dict(person),"skills":skills,"projects":projects,"certifications":recommendations,"earned_certifications":certificates}
+    return {"employee":dict(person),"details":dict(details) if details else {"job_title":"","specialization":"","grade":"","years_experience":None,"about":""},"skills":skills,"projects":projects,"certifications":recommendations,"earned_certifications":certificates}
 
 @app.post("/api/users/{employee_id}/skills")
 def add_skill(employee_id:int,data:Skill,authorization:str|None=Header(default=None)):
@@ -181,6 +190,11 @@ def resume(employee_id:int,authorization:str|None=Header(default=None)):
     doc=Document()
     doc.add_heading("Проектное резюме",0)
     doc.add_heading(data["employee"]["name"],level=1)
+    details=data["details"]
+    for label,key in (("Должность","job_title"),("Специализация","specialization"),("Грейд","grade"),("Опыт, лет","years_experience")):
+        if details.get(key) is not None and details.get(key)!="":
+            doc.add_paragraph(label+": "+str(details[key]))
+    if details.get("about"): doc.add_paragraph(details["about"])
     doc.add_heading("Компетенции",level=2)
     for s in data["skills"]: doc.add_paragraph(s["name"]+(" — подтверждено" if s["verified_by"] else " — заявлено"),style="List Bullet")
     doc.add_heading("Сертификации",level=2)
@@ -232,4 +246,19 @@ def delete_employee_certificate(employee_id:int,record_id:int,authorization:str|
     with database() as db:
         result=db.execute("DELETE FROM employee_certifications WHERE id=? AND employee_id=?",(record_id,employee_id))
         if not result.rowcount: raise HTTPException(404,"Запись не найдена")
+    return {"ok":True}
+
+@app.put("/api/users/{employee_id}/profile")
+def update_profile(employee_id:int,data:ProfileUpdate,authorization:str|None=Header(default=None)):
+    actor=current(authorization);access(actor,employee_id,write=True)
+    with database() as db:
+        if not db.execute("SELECT 1 FROM users WHERE id=?",(employee_id,)).fetchone():
+            raise HTTPException(404,"Сотрудник не найден")
+        db.execute("""INSERT INTO employee_profiles(employee_id,job_title,specialization,grade,years_experience,about)
+        VALUES(?,?,?,?,?,?)
+        ON CONFLICT(employee_id) DO UPDATE SET job_title=excluded.job_title,
+        specialization=excluded.specialization,grade=excluded.grade,
+        years_experience=excluded.years_experience,about=excluded.about,
+        updated_at=CURRENT_TIMESTAMP""",
+        (employee_id,data.job_title.strip(),data.specialization.strip(),data.grade.strip(),data.years_experience,data.about.strip()))
     return {"ok":True}
