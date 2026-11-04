@@ -19,6 +19,14 @@ def test_end_to_end():
             assert call("post",f"/api/users/{e}/skills/{s}/confirm",mt).status_code==200
             assert call("post",f"/api/users/{e}/projects",et,json={"title":"Внедрение 1С","description":"Разработка отчётов"}).status_code==200
             assert call("post","/api/certifications",a,json={"skill_keyword":"СКД","exam_title":"Учебный экзамен 1С"}).status_code==200
+            catalog=call("get","/api/certifications/catalog",et).json()
+            assert len(catalog)==1
+            cert=call("post",f"/api/users/{e}/certifications",et,json={"certification_id":catalog[0]["id"],"certificate_number":"DEMO-001","passport_url":"https://example.org/passport"}).json()["id"]
+            assert call("post",f"/api/users/{e}/certifications",et,json={"certification_id":catalog[0]["id"],"certificate_number":"DEMO-002","passport_url":"http://example.org"}).status_code==422
+            p=call("get",f"/api/users/{e}/profile",et).json()
+            assert p["earned_certifications"][0]["certificate_number"]=="DEMO-001"
+            assert call("delete",f"/api/users/{e}/certifications/{cert}",mt).status_code==403
+            assert call("delete",f"/api/users/{e}/certifications/{cert}",et).status_code==200
             p=call("get",f"/api/users/{e}/profile",et).json()
             assert p["skills"][0]["verified_by"]==m
             assert p["certifications"][0]["exam_title"]=="Учебный экзамен 1С"
