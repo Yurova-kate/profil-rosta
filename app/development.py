@@ -85,11 +85,11 @@ def update_goal(employee_id:int,goal_id:int,data:GoalUpdate,authorization:str|No
     main.access(main.current(authorization),employee_id,write=True)
     check(data)
     with main.database() as db:
-        validate_competency(db,data.competency_id)
+        validate_competency(db,data.competency_id,data.certification_id)
         cur=db.execute("""UPDATE development_goals SET title=?,competency_id=?,target_level=?,
             certification_id=?,due_date=?,actions=?,status=?,updated_at=CURRENT_TIMESTAMP
             WHERE id=? AND employee_id=?""",(data.title.strip(),data.competency_id,data.target_level,
-            data.due_date.isoformat() if data.due_date else None,data.actions.strip(),
+            data.certification_id,data.due_date.isoformat() if data.due_date else None,data.actions.strip(),
             data.status,goal_id,employee_id))
         if not cur.rowcount: raise HTTPException(404,"Цель не найдена")
     return {"ok":True}
