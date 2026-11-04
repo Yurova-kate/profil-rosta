@@ -1,4 +1,5 @@
-import os, tempfile
+import os, tempfile, io
+from docx import Document
 from fastapi.testclient import TestClient
 from app import main
 
@@ -31,4 +32,10 @@ def test_end_to_end():
             assert p["certifications"][0]["exam_title"]=="Учебный экзамен 1С"
             r=call("get",f"/api/users/{e}/resume.docx",et)
             assert r.status_code==200 and r.content[:2]==b"PK"
+            document=Document(io.BytesIO(r.content))
+            paragraphs="\n".join(p.text for p in document.paragraphs)
+            assert "Сотрудник" in paragraphs
+            assert "Внедрение 1С" in paragraphs
+            assert "Разработка отчётов" in paragraphs
+            assert "СКД 1С" in paragraphs
             assert call("get",f"/api/users/{m}/profile",et).status_code==403
