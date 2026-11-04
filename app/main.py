@@ -143,7 +143,7 @@ def profile(employee_id:int,authorization:str|None=Header(default=None)):
         details=db.execute("SELECT job_title,specialization,grade,years_experience,about,updated_at FROM employee_profiles WHERE employee_id=?",(employee_id,)).fetchone()
         skills=[dict(r) for r in db.execute("SELECT id,name,verified_by FROM skills WHERE employee_id=?",(employee_id,))]
         projects=[dict(r) for r in db.execute("SELECT id,title,description FROM projects WHERE employee_id=?",(employee_id,))]
-        competency_rows=[dict(r) for r in db.execute("""SELECT c.name,ec.level,ec.verified_by
+        competency_rows=[dict(r) for r in db.execute("""SELECT c.name,ec.level
           FROM employee_competencies ec JOIN competency_catalog c ON c.id=ec.competency_id
           WHERE ec.employee_id=? ORDER BY c.category,c.name""",(employee_id,))] if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='employee_competencies'").fetchone() else []
         recommendations=[dict(r) for r in db.execute("SELECT DISTINCT c.id,c.exam_title FROM certifications c JOIN skills s ON lower(s.name) LIKE '%'||lower(c.skill_keyword)||'%' WHERE s.employee_id=?",(employee_id,))]
@@ -164,19 +164,6 @@ def add_project(employee_id:int,data:Project,authorization:str|None=Header(defau
     with database() as db:
         cur=db.execute("INSERT INTO projects(employee_id,title,description) VALUES(?,?,?)",(employee_id,data.title,data.description))
         return {"id":cur.lastrowid}
-
-@app.post("/api/users/{employee_id}/skills/{skill_id}/confirm")
-def confirm(employee_id:int,skill_id:int,authorization:str|None=Header(default=None)):
-    actor=current(authorization)
-    if actor["role"]=="employee": raise HTTPException(403,"Только руководитель или администратор")
-    if actor["role"]=="manager":
-        with database() as db:
-            person=db.execute("SELECT manager_id FROM users WHERE id=?",(employee_id,)).fetchone()
-        if not person or person["manager_id"]!=actor["id"]: raise HTTPException(403,"Не ваш сотрудник")
-    with database() as db:
-        cur=db.execute("UPDATE skills SET verified_by=? WHERE id=? AND employee_id=?",(actor["id"],skill_id,employee_id))
-        if not cur.rowcount: raise HTTPException(404,"Навык не найден")
-    return {"ok":True}
 
 @app.post("/api/certifications")
 def add_certification(data:Exam,authorization:str|None=Header(default=None)):
@@ -199,14 +186,14 @@ def resume(employee_id:int,authorization:str|None=Header(default=None)):
             doc.add_paragraph(label+": "+str(details[key]))
     if details.get("about"): doc.add_paragraph(details["about"])
     doc.add_heading("Компетенции",level=2)
-    for s in data["skills"]: doc.add_paragraph(s["name"]+(" — подтверждено" if s["verified_by"] else " — заявлено"),style="List Bullet")
+    for s in data["skills"]: doc.add_paragraph(s["name"],style="List Bullet")
     doc.add_heading("Сертификации",level=2)
     for cert in data["earned_certifications"]:
         doc.add_paragraph(cert["exam_title"]+" — № "+cert["certificate_number"]+((" — "+cert["passport_url"]) if cert["passport_url"] else ""),style="List Bullet")
     doc.add_heading("Компетенции из справочника",level=2)
     levels={"beginner":"Начальный","intermediate":"Рабочий","advanced":"Продвинутый","expert":"Экспертный"}
     for competency in data["competency_rows"]:
-        doc.add_paragraph(competency["name"]+" — "+levels.get(competency["level"],competency["level"])+(" (подтверждено)" if competency["verified_by"] else " (заявлено)"),style="List Bullet")
+        doc.add_paragraph(competency["name"]+" — "+levels.get(competency["level"],competency["level"])+"",style="List Bullet")
     doc.add_heading("Проектный опыт",level=2)
     for p in data["projects"]:
         doc.add_heading(p["title"],level=3)
