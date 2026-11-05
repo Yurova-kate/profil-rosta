@@ -22,3 +22,7 @@ def development_script():
 @app.get("/career.js",include_in_schema=False)
 def career_script():
     return FileResponse(Path(__file__).resolve().parents[1]/"web"/"career.js",media_type="application/javascript")
+
+@app.get("/overview.js",include_in_schema=False)
+def overview_script():
+    return FileResponse(Path(__file__).resolve().parents[1]/"web"/"overview.js",media_type="application/javascript")
