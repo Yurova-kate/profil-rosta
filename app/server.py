@@ -18,3 +18,7 @@ from pathlib import Path
 @app.get("/development.js",include_in_schema=False)
 def development_script():
     return FileResponse(Path(__file__).resolve().parents[1]/"web"/"development.js",media_type="application/javascript")
+
+@app.get("/career.js",include_in_schema=False)
+def career_script():
+    return FileResponse(Path(__file__).resolve().parents[1]/"web"/"career.js",media_type="application/javascript")
