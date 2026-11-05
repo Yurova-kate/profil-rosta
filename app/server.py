@@ -1,14 +1,16 @@
 """Application entrypoint: original MVP and competency module."""
 from .main import app
-from . import competencies, development
+from . import competencies, development, career
 
 app.include_router(competencies.router)
 app.include_router(development.router)
+app.include_router(career.router)
 
 @app.on_event("startup")
 def initialize_competency_tables():
     competencies.initialize()
     development.initialize()
+    career.initialize()
 
 from fastapi.responses import FileResponse
 from pathlib import Path
