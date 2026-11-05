@@ -203,10 +203,31 @@ def resume(employee_id:int,authorization:str|None=Header(default=None)):
     levels={"beginner":"Начальный","intermediate":"Рабочий","advanced":"Продвинутый","expert":"Экспертный"}
     for competency in data["competency_rows"]:
         doc.add_paragraph(competency["name"]+" — "+levels.get(competency["level"],competency["level"])+"",style="List Bullet")
+    with database() as db:
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_experiences'").fetchone():
+            work_entries=[dict(r) for r in db.execute(
+                "SELECT * FROM work_experiences WHERE employee_id=? ORDER BY current DESC,start_date DESC,id DESC",(employee_id,))]
+            project_entries=[dict(r) for r in db.execute(
+                "SELECT * FROM projects WHERE employee_id=? ORDER BY start_date IS NULL,start_date DESC,id DESC",(employee_id,))]
+        else:
+            work_entries=[]
+            project_entries=data["projects"]
+    if work_entries:
+        doc.add_heading("Опыт работы",level=2)
+        for w in work_entries:
+            doc.add_heading(w["company"]+" — "+w["position"],level=3)
+            doc.add_paragraph(w["start_date"]+" — "+(w["end_date"] or "по настоящее время"))
+            if w["description"]: doc.add_paragraph(w["description"])
+            if w["achievements"]: doc.add_paragraph("Достижения: "+w["achievements"])
     doc.add_heading("Проектный опыт",level=2)
-    for p in data["projects"]:
+    for p in project_entries:
         doc.add_heading(p["title"],level=3)
-        doc.add_paragraph(p["description"])
+        if p.get("role"): doc.add_paragraph("Роль: "+p["role"])
+        if p.get("organization"): doc.add_paragraph("Заказчик: "+p["organization"])
+        if p.get("start_date"): doc.add_paragraph("Период: "+p["start_date"]+" — "+(p.get("end_date") or "по настоящее время"))
+        if p.get("description"): doc.add_paragraph(p["description"])
+        if p.get("technologies"): doc.add_paragraph("Технологии: "+p["technologies"])
+        if p.get("outcomes"): doc.add_paragraph("Результаты: "+p["outcomes"])
     buffer=io.BytesIO();doc.save(buffer);buffer.seek(0)
     return StreamingResponse(buffer,media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",headers={"Content-Disposition":'attachment; filename="resume.docx"'})
 
