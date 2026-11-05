@@ -38,5 +38,5 @@ def test_frontend_javascript_syntax():
     with TemporaryDirectory() as folder:
         inline=Path(folder)/"inline.js"
         inline.write_text(script,encoding="utf-8")
-        for path in (inline,root/"web/development.js"):
+        for path in (inline,root/"web/development.js",root/"web/career.js",root/"web/overview.js"):
             subprocess.run([node,"--check",str(path)],check=True,capture_output=True,text=True)
